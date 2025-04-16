@@ -37,7 +37,7 @@ def mocaSearch(driver, nome):
             
     except Exception as e:
         print(f"An error occurred: {e}")
-
+        
 def eeSearch(driver, sku):
     sku = sku.upper()
     try:
@@ -70,7 +70,7 @@ def eeSearch(driver, sku):
                 
         if not found:
             print(f"Product with SKU {sku} not found")
-            return None
+            return None, None
             
         # 3. Click through all carousel items
         owl_inset = driver.find_elements(By.CLASS_NAME, "owl-inset-arrows")[1]
@@ -87,13 +87,26 @@ def eeSearch(driver, sku):
         carousel_wrapper = driver.find_element(By.CSS_SELECTOR, ".product-images-carousel-wrapper")
         image_links = [a.get_attribute("href") for a in carousel_wrapper.find_elements(By.TAG_NAME, "a")]
         
-        return image_links
+        # 5. Get specifications data
+        specifications = {}
+        try:
+            specs_div = driver.find_element(By.ID, "Specifications")
+            list_items = specs_div.find_elements(By.TAG_NAME, "li")
+            
+            for li in list_items:
+                try:
+                    spans = li.find_elements(By.CSS_SELECTOR, "span")
+                    specifications[spans[0].text.strip()] = spans[1].text.strip()
+                except:
+                    continue
+        except Exception as e:
+            print(f"Could not retrieve specifications: {str(e)}")
+        
+        return image_links, specifications
     
     except Exception as e:
         print(f"An error occurred: {str(e)}")
-        return None
-
-
+        return None, None
 
 def googleShoppingSearch(driver, query):
     try:
@@ -187,4 +200,4 @@ driver = webdriver.Chrome(options=chrome_options)
 # Get user input
 search_query = input("Enter your search query: ")
 
-print(mocaSearch(driver, search_query))
+print(eeSearch(driver, search_query))
