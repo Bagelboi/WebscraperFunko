@@ -8,7 +8,18 @@ from selenium.webdriver.common.keys import Keys  # Added missing import
 import subprocess
 import time
 
-def mocaSearch(driver, nome):
+class ProdutoPayload:
+    def __init__(s, sku, imagens=[], specs=dict()):
+        s.sku = sku
+        s.imagens = imagens
+        s.specs = specs
+    def __str__(s):
+        specs_s = ""
+        for k,v in s.specs.items():
+            specs_s += f"{v},"
+        return ";".join([s.sku, ",".join(s.imagens), specs_s])
+
+def mocaSearch(driver, nome, sku):
     nome_new = nome.replace(" ", "+")
     url = "https://www.mocadopop.com.br/buscar?q=" + nome_new
     driver.get(url)
@@ -32,14 +43,17 @@ def mocaSearch(driver, nome):
         
         # 4. Get all child of ul that are <a> with attribute data-imagem-grande and print its value
         image_links = thumbnails.find_elements(By.CSS_SELECTOR, "a[data-imagem-grande]")
+        payload = ProdutoPayload(sku)
         for link in image_links:
-            print(link.get_attribute("data-imagem-grande"))
+            payload.imagens.append( link.get_attribute("data-imagem-grande") )
+        return payload
             
     except Exception as e:
         print(f"An error occurred: {e}")
         
 def eeSearch(driver, sku):
     sku = sku.upper()
+    payload = ProdutoPayload(sku)
     try:
         # 1. Go to the search URL
         driver.get(f"https://www.entertainmentearth.com/s/?query1={sku}")
@@ -70,7 +84,7 @@ def eeSearch(driver, sku):
                 
         if not found:
             print(f"Product with SKU {sku} not found")
-            return None, None
+            return None
             
         # 3. Click through all carousel items
         owl_inset = driver.find_elements(By.CLASS_NAME, "owl-inset-arrows")[1]
@@ -85,119 +99,148 @@ def eeSearch(driver, sku):
                 
         # 4. Get all image hrefs
         carousel_wrapper = driver.find_element(By.CSS_SELECTOR, ".product-images-carousel-wrapper")
-        image_links = [a.get_attribute("href") for a in carousel_wrapper.find_elements(By.TAG_NAME, "a")]
+        [payload.imagens.append(a.get_attribute("href")) for a in carousel_wrapper.find_elements(By.TAG_NAME, "a")]
         
         # 5. Get specifications data
-        specifications = {}
         try:
             specs_div = driver.find_element(By.ID, "Specifications")
             list_items = specs_div.find_elements(By.TAG_NAME, "li")
-            
+            key_filter = ["Age:", "Company:"]
             for li in list_items:
                 try:
                     spans = li.find_elements(By.CSS_SELECTOR, "span")
-                    specifications[spans[0].text.strip()] = spans[1].text.strip()
+                    key = spans[0].text.strip()
+                    if key not in key_filter:
+                        payload.specs[key] = spans[1].text.strip()
                 except:
                     continue
         except Exception as e:
             print(f"Could not retrieve specifications: {str(e)}")
         
-        return image_links, specifications
+        return payload
     
     except Exception as e:
         print(f"An error occurred: {str(e)}")
-        return None, None
+        return None
 
-def googleShoppingSearch(driver, query):
+
+
+def mercadoLivreLookup(driver, search_query, sku):
+    # URL encode the search query
+    url = f"https://lista.mercadolivre.com.br/{search_query}"
+    payload = ProdutoPayload(sku)
+    
     try:
-        # Navigate to Google Shopping
-        driver.get("https://www.google.com/shopping")
+        # Navigate to the search page
+        driver.get(url)
         
-        # Wait for page to load completely
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.NAME, "q"))
-        )
+        # Wait for and click first product (with more robust waiting)
+        first_product = WebDriverWait(driver, 15).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "a.poly-component__title")))
+        first_product.click()
+    
         
-        # Find the search input field
-        search_box = driver.find_element(By.NAME, "q")
+        # Get all zoomable images
+        zoom_images = WebDriverWait(driver, 10).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "img[data-zoom]")))
         
-        # Clear any existing text and enter the query
-        search_box.clear()
-        search_box.send_keys(query)
-        
-        # Submit the search
-        search_box.send_keys(Keys.RETURN)
-        
-        # Wait for results to load
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".sh-sr__shop-result-group, .sh-dgr__grid-result"))
-        )
-        
-        # Find all shop result groups
-        result_groups = driver.find_elements(By.CSS_SELECTOR, ".sh-sr__shop-result-group")
-        
-        if len(result_groups) == 3:
-            # Scenario 1: 3 groups (best match + other results)
-            print("Found 3 result groups (best match + other results)")
-            # Wait for images in the best match section
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".sh-div__image"))
-            )
-            images = driver.find_elements(By.CSS_SELECTOR, ".sh-div__image")
-            for img in images[:5]:
-                print("Image src:", img.get_attribute("src"))
+        for img in zoom_images:
+            src = img.get_attribute("src")
+            if src:
+                payload.imagens.append(src)
                 
-        elif len(result_groups) == 2:
-            # Scenario 2: 2 groups (just regular results)
-            print("Found 2 result groups (regular results)")
-            # Get the first 3 products
-            products = driver.find_elements(By.CSS_SELECTOR, ".sh-dgr__grid-result")[:3]
-            
-            for i, product in enumerate(products, 1):
-                try:
-                    print(f"\nProcessing product {i}")
-                    
-                    # Scroll to the element with JavaScript
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", product)
-                    
-                    # Wait for the element to be clickable
-                    WebDriverWait(driver, 10).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, ".sh-dgr__grid-result"))
-                    )
-                    
-                    # Click using JavaScript as a fallback
-                    try:
-                        product.click()
-                    except:
-                        driver.execute_script("arguments[0].click();", product)
-                    
-                    # Wait for image to load
-                    WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, ".sh-div__image"))
-                    )
-
-                    images = driver.find_elements(By.CSS_SELECTOR, ".sh-div__image")
-                    for img in images[:5]:
-                        print("Image src:", img.get_attribute("src"))
-
-                except Exception as e:
-                    print(f"Error processing product {i}:", str(e))
-                    continue
-                    
-        else:
-            print(f"Unexpected number of result groups found: {len(result_groups)}")
-            
     except Exception as e:
-        print("Error in googleShoppingSearch:", str(e))
+        print(f"An error occurred during Mercado Livre lookup: {str(e)}")
+        # Consider re-raising or handling specific exceptions differently
+    
+    return payload
 
-# Configure Chrome to connect to existing instance
-chrome_options = Options()
-chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+##def googleShoppingSearch(driver, query, sku):
+#   Bem bunda, Google ofusca tudo
+##    payload = ProdutoPayload(sku)
+##    try:
+##        # Navigate to Google Shopping
+##        driver.get("https://www.google.com/shopping")
+##        
+##        # Wait for page to load completely
+##        WebDriverWait(driver, 10).until(
+##            EC.presence_of_element_located((By.NAME, "q"))
+##        )
+##        
+##        # Find the search input field
+##        search_box = driver.find_element(By.NAME, "q")
+##        
+##        # Clear any existing text and enter the query
+##        search_box.clear()
+##        search_box.send_keys(query)
+##        
+##        # Submit the search
+##        search_box.send_keys(Keys.RETURN)
+##        
+##        # Wait for results to load
+##        WebDriverWait(driver, 10).until(
+##            EC.presence_of_element_located((By.CSS_SELECTOR, ".sh-sr__shop-result-group, .sh-dgr__grid-result"))
+##        )
+##        
+##        # Find all shop result groups
+##        result_groups = driver.find_elements(By.CSS_SELECTOR, ".sh-sr__shop-result-group")
+##        
+##        if len(result_groups) == 3:
+##            # Scenario 1: 3 groups (best match + other results)
+##            print("Found 3 result groups (best match + other results)")
+##            # Wait for images in the best match section
+##            WebDriverWait(driver, 10).until(
+##                EC.presence_of_element_located((By.CSS_SELECTOR, ".sh-div__image"))
+##            )
+##            images = driver.find_elements(By.CSS_SELECTOR, ".sh-div__image")
+##            
+##            for img in images[:5]:
+##                payload.imagens.append("Image src:", img.get_attribute("src"))
+##                
+##        elif len(result_groups) == 2:
+##            # Scenario 2: 2 groups (just regular results)
+##            print("Found 2 result groups (regular results)")
+##            # Get the first 3 products
+##            products = driver.find_elements(By.CSS_SELECTOR, ".sh-dgr__grid-result")[:3]
+##            
+##            for i, product in enumerate(products, 1):
+##                try:
+##                    print(f"\nProcessing product {i}")
+##                    
+##                    # Scroll to the element with JavaScript
+##                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", product)
+##                    
+##                    # Wait for the element to be clickable
+##                    WebDriverWait(driver, 10).until(
+##                        EC.element_to_be_clickable((By.CSS_SELECTOR, ".sh-dgr__grid-result"))
+##                    )
+##                    
+##                    # Click using JavaScript as a fallback
+##                    try:
+##                        product.click()
+##                    except:
+##                        driver.execute_script("arguments[0].click();", product)
+##                    
+##                    # Wait for image to load
+##                    WebDriverWait(driver, 10).until(
+##                        EC.presence_of_element_located((By.CSS_SELECTOR, ".sh-div__image"))
+##                    )
+##
+##                    images = driver.find_elements(By.CSS_SELECTOR, ".sh-div__image")
+##                    
+##                    for img in images[:5]:
+##                        payload.imagens.append("Image src:", img.get_attribute("src"))
+##
+##                except Exception as e:
+##                    print(f"Error processing product {i}:", str(e))
+##                    continue
+##                    
+##        else:
+##            print(f"Unexpected number of result groups found: {len(result_groups)}")
+##            return None
+##        
+##        return payload        
+##            
+##    except Exception as e:
+##        print("Error in googleShoppingSearch:", str(e))
 
-# Point to your ChromeDriver
-driver = webdriver.Chrome(options=chrome_options)
-
-# Get user input
-search_query = input("Enter your search query: ")
-
-print(eeSearch(driver, search_query))
