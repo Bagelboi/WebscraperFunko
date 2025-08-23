@@ -1,0 +1,7 @@
+aiohttp==3.12.15
+InquirerPy==0.3.4
+openpyxl==3.1.5
+playwright==1.54.0
+playwright_stealth==2.0.0
+rapidfuzz==3.13.0
+selenium==4.35.0
