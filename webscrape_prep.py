@@ -45,14 +45,18 @@ async def main():
         print("No input provided.")
         return
 
-    pairs = [p for p in user_input.split(";") if "//" in p]
+    entries = [p.strip() for p in user_input.split(";") if p.strip()]
 
     sem = asyncio.Semaphore(LIMIT)
 
     async with aiohttp.ClientSession() as session:
         tasks = []
-        for pair in pairs:
-            sku, query = pair.split("//", 1)
+        for entry in entries:
+            if "//" in entry:
+                sku, query = entry.split("//", 1)
+            else:
+                # no "//" → use query as sku as well
+                sku = query = entry
             tasks.append(fetch_and_save(session, sku.strip(), query.strip(), sem))
 
         await asyncio.gather(*tasks)

@@ -14,7 +14,7 @@ def main():
         ).execute()
 
         if escolha == "Criar excel com ofertas":
-            directory = input("Digite o diretorio das imagens: ")
+            directory = input("Digite o diretorio dos anuncios: ")
             json_directory = input("Digite o diretorio dos json: ")
             excel_file = input("Digite o nome do arquivo excel: ") + ".xlsx"
             chunk_size = input("Digite a quantidade de ofertas processadas simultaneamente:  ")
@@ -25,9 +25,9 @@ def main():
 
         elif escolha == "Mostrar imagens":
             directory = input("Digite o diretorio dos json: ")
-            item_max = input("Digite o maximo de imagens por item: ")
-            output_folder = input("Digite o diretorio de saida para as imagens: ")
-            ordered = input("Digite a quantidade de imagens para serem ordenadas por relevancia: ")
+            item_max = input("Digite o maximo de anuncios por item: ")
+            output_folder = input("Digite o diretorio de saida para os anuncios: ")
+            ordered = input("Digite a quantidade de anuncios para serem ordenadas por relevancia: ")
 
             subprocess.run(
                 [sys.executable, "webscrape_image.py", directory, item_max, output_folder, ordered]

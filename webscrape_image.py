@@ -31,7 +31,7 @@ def extract_keywords(url):
 
 # Iterate through all files in the directory
 for filename in os.listdir(DIRECTORY):
-    if filename.startswith("FU") and filename.endswith(".json"):
+    if filename.endswith(".json"):
         filepath = os.path.join(DIRECTORY, filename)
         with open(filepath, "r", encoding="utf-8") as f:
             try:

@@ -188,7 +188,7 @@ def save_to_excel(results, filename):
             ws.append(["", vendedor, preco])
             vcell = ws.cell(row=row_idx, column=2)
             if url and url != "N/A":
-                vcell.hyperlink = url
+                vcell.hyperlink = "https://www.google.com.br/" + url
                 vcell.style = "Hyperlink"
 
     wb.save(filename)
